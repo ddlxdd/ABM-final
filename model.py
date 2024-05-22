@@ -30,18 +30,30 @@ class Individual(Agent):
 
     def step(self):
         net_support = 0
+        print(f"Agent {self.unique_id} stepping. Current depression: {self.depression_level}")
+
         # Calculate support from neighbors
         for neighbor in self.model.G.neighbors(self.unique_id):
             neighbor_agent = self.model.G.nodes[neighbor]['agent']
             if isinstance(neighbor_agent, SupportiveMember) and random.random() < 0.5:
                 support_type = neighbor_agent.member_type
-                support_value = SUPPORT_STRENGTHS[support_type]* random.uniform(0.5, 1.5)
-                net_support += support_value
-                self.support_network[support_type] += 1
+                support_value = SUPPORT_STRENGTHS[support_type] * random.uniform(0.5, 1.5)
 
-        new_depression_index = self.depression_level.value - (net_support*self.model.support_effectiveness)
-        print(new_depression_index)
+                # Determine if the individual accepts the help
+                if random.random() < self.model.acceptance_probability:
+                    net_support += support_value
+                    print(f"Agent {self.unique_id} accepted {support_value:.2f} support from {support_type}")
+                else:
+                    # Determine the outcome if the individual refuses help
+                    if random.random() < self.model.refusal_gets_worse_probability:
+                        net_support -= support_value 
+                        print(f"Agent {self.unique_id} refused help and got worse by {support_value:.2f}")
+                    else:
+                        net_support += support_value
+                        print(f"Agent {self.unique_id} refused help but still got better by {support_value:.2f}")
 
+        new_depression_index = self.depression_level.value - (net_support * self.model.support_effectiveness)
+        print(f"Agent {self.unique_id} - Old Depression: {self.depression_level}, Net Support: {net_support}, New Depression Index: {new_depression_index}")
 
         if new_depression_index < 0.5:
             self.depression_level = State.MILD
@@ -49,6 +61,8 @@ class Individual(Agent):
             self.depression_level = State.MODERATE
         else:
             self.depression_level = State.SEVERE
+
+        print(f"Agent {self.unique_id} - New Depression: {self.depression_level}")
 
 
 # Agent representing a supportive member
@@ -76,47 +90,49 @@ def compute_average_depression(model):
 
     return average_depression
 
+def count_state(model, state):
+    return sum(1 for agent in model.schedule.agents if isinstance(agent, Individual) and agent.depression_level == state)
+
 
 class DepressionSupportModel(Model):
-    def __init__(self,num_agents=10, num_supportive=20, stigma_level=0.5, support_effectiveness=0.5):
+    def __init__(self, num_agents, num_supportive, stigma_level, support_effectiveness, acceptance_probability, refusal_gets_worse_probability):
         super().__init__()
         self.num_agents = num_agents
         self.num_supportive = num_supportive
         self.stigma_level = stigma_level
         self.support_effectiveness = support_effectiveness
+        self.acceptance_probability = acceptance_probability
+        self.refusal_gets_worse_probability = refusal_gets_worse_probability
+        self.G = nx.erdos_renyi_graph(n=num_agents + num_supportive, p=0.1)
         self.schedule = RandomActivation(self)
-        self.G = nx.Graph()
-        self.setup_agents()
+
+        print(f"Initializing model with {num_agents} agents and {num_supportive} supportive members.")
+
+        for i in range(num_agents):
+            depression_level = State(random.randint(0, 2))
+            resilience_factor = random.uniform(0.1, 1.0)
+            agent = Individual(i, self, depression_level, resilience_factor)
+            self.G.nodes[i]['agent'] = agent
+            self.schedule.add(agent)
+            print(f"Added Individual agent {i} with initial depression level {depression_level}")
+
+        for i in range(num_agents, num_agents + num_supportive):
+            member_type = random.choice(list(SUPPORT_STRENGTHS.keys()))
+            agent = SupportiveMember(i, self, member_type)
+            self.G.nodes[i]['agent'] = agent
+            self.schedule.add(agent)
+            print(f"Added SupportiveMember agent {i} with type {member_type}")
+
         self.datacollector = DataCollector(
             model_reporters={
-                "Average Depression": compute_average_depression
+                "Average Depression": compute_average_depression,
+                "Mild Count": lambda m: count_state(m, State.MILD),
+                "Moderate Count": lambda m: count_state(m, State.MODERATE),
+                "Severe Count": lambda m: count_state(m, State.SEVERE),
             }
         )
 
-    def setup_agents(self):
-        all_agents = []
-        for i in range(self.num_agents):
-            depression_level = State(random.choice([0, 1, 2]))
-            resilience_factor = random.random()
-            agent = Individual(i, self, depression_level, resilience_factor)
-            self.schedule.add(agent)
-            all_agents.append(agent)
-            self.G.add_node(agent.unique_id, agent=agent)
-
-        for j in range(self.num_agents, self.num_agents + self.num_supportive):
-            member_type = random.choice(['therapist', 'family', 'friend'])
-            supportive_member = SupportiveMember(j, self, member_type)
-            self.schedule.add(supportive_member)
-            self.G.add_node(supportive_member.unique_id, agent=supportive_member)
-
-        for individual in [agent for agent in all_agents if isinstance(agent, Individual)]:
-            supportive_members = [member for member in self.schedule.agents if isinstance(member, SupportiveMember)]
-
-            for supportive_member in supportive_members:
-                if random.random() < 0.2:
-                    self.G.add_edge(individual.unique_id, supportive_member.unique_id)
-
-
-def step(self):
-        self.datacollector.collect(self)
+    def step(self):
+        print("Model stepping.")
         self.schedule.step()
+        self.datacollector.collect(self)

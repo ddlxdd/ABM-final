@@ -1,8 +1,8 @@
-import mesa
 from mesa.visualization.ModularVisualization import ModularServer
-from mesa.visualization.modules import NetworkModule, ChartModule
+from mesa.visualization.modules import NetworkModule
+from mesa.visualization.modules import ChartModule
 from mesa.visualization.UserParam import Slider
-from model import DepressionSupportModel, Individual, State, SupportiveMember
+from model import DepressionSupportModel, State, SupportiveMember
 
 def network_portrayal(G):
     def node_color(agent):
@@ -46,7 +46,9 @@ model_params = {
     "num_agents": Slider("Number of Agents", 10, 2, 50, 1),
     "num_supportive": Slider("Number of Supportive Members", 20, 1, 50, 1),
     "stigma_level": Slider("Stigma Level", 0.5, 0.0, 1.0, 0.05),
-    "support_effectiveness": Slider("Support Effectiveness", 0.5, 0.0, 1.0, 0.05)
+    "support_effectiveness": Slider("Support Effectiveness", 0.5, 0.0, 1.0, 0.05),
+    "acceptance_probability": Slider("Acceptance Probability", 0.7, 0.0, 1.0, 0.05),
+    "refusal_gets_worse_probability": Slider("Refusal Gets Worse Probability", 0.5, 0.0, 1.0, 0.05)
 }
 
 server = ModularServer(DepressionSupportModel,
@@ -54,3 +56,4 @@ server = ModularServer(DepressionSupportModel,
                        "Depression and Support Networks Model",
                        model_params)
 server.port = 8521
+
